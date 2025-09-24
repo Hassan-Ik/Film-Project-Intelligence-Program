@@ -190,7 +190,10 @@ def analyze_synopsis(req: StoryRequest):
 
         # A clear and robust openai script for good JSON based response
         prompt = f"""
-        You are an expert Hollywood script and story analyst and data scientist. Analyze the following film synopsis and provide ONLY a valid JSON response with data-driven insights about its creative potential and commercial viability.
+        You are an expert Hollywood script and story analyst and data scientist. 
+        Analyze the following film synopsis and provide ONLY a valid JSON response with data-driven, unbiased insights about its creative potential and commercial viability. 
+        Be critical and honest, even harsh if the synopsis merits it, prioritizing objective analysis over positive framing. 
+        Do not assume market fit or appeal unless supported by evidence.
 
         SYNOPSIS: {req.story}
         {market_context if market_context else "Note: Limited market data available - base analysis on general industry trends."}
