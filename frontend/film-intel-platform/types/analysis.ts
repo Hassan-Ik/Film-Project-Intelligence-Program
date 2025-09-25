@@ -40,6 +40,12 @@ export interface Metadata {
   reason?: string;
 }
 
+export interface SimilarMovies {
+  Title: string;
+  Year: string;
+  Poster: string;
+}
+
 export interface AnalysisResponse {
   title: string;
   logline: string;
@@ -49,4 +55,5 @@ export interface AnalysisResponse {
   characters: Character[];
   pitch_ready_copy: PitchReadyCopy;
   metadata?: Metadata;
+  similar_movies?: SimilarMovies[];
 }

@@ -4,16 +4,10 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        primary: "#2563EB",
-        primaryHover: "#1D4ED8",
-        genres: "#E9D5FF",
-        genresText: "#6B21A8",
-        themes: "#DCFCE7",
-        themesText: "#166534",
-        pitchBg: "#DBEAFE",
-        pitchText: "#1E40AF",
-        cardBg: "#FFFFFF",
-        bgMain: "#F9FAFB",
+        'dark-gray': '#121212',   // background like black
+        'maroon': '#800000',      // primary button
+        'maroon-dark': '#660000', // hover
+        'gray-border': '#1f1f1f', // borders for panels
       },
     },
   },

@@ -43,131 +43,172 @@ emotion_model = pipeline(
     return_all_scores=True
 )
 
-def extract_keywords(synopsis: str) -> List[str]:
-    """
-    Extract keywords suitable for TMDb/OMDb search, focusing on plot, genre, and main concepts.
-    Ensures the output is always a valid JSON array of strings.
-    """
+def similar_movies(synopsis: str) -> List[str]:
+    """Find 0–10 movies similar to the provided synopsis based on thematic, tonal, and narrative alignment."""
     prompt = f"""
-    Extract 3-6 keywords, phrases, or proper nouns from this movie synopsis
-    that would help find it in a movie database (TMDb or OMDb). 
-    Focus primarily on:
-    - Main plot points or story concepts
-    - Key genres or themes
-    - Important characters or locations only if central to the plot
-    
-    Avoid emphasizing actors or directors.
-    
-    Return ONLY a JSON array of strings. No explanations, no extra text.
-    Synopsis:
-    {synopsis}
+    You are a discerning film recommendation engine, modeled after expert critics like Roger Ebert or Pauline Kael. 
+    Your recommendations are thoughtful, precise, and based on deep analysis of thematic resonance, tonal alignment, 
+    narrative structure, genre conventions, character dynamics, setting evocation, and emotional impact. 
+    Prioritize quality over quantity—only suggest films that genuinely echo the provided synopsis in meaningful ways. 
+    If the synopsis matches an already-released movie, include that movie as the strongest match. 
+    If no existing films match closely enough, return an empty array.
+
+    Input: A synopsis or treatment of a movie (released or unreleased).
+
+    Task: Analyze the synopsis holistically. Then, suggest 0–10 existing movies that are the strongest matches. Base selections on:
+    - Genre fit (e.g., horror subgenres like psychological vs. supernatural).
+    - Core themes (e.g., revenge cycles, isolation, supernatural retribution).
+    - Character archetypes (e.g., vulnerable protagonists, manipulative antagonists).
+    - Setting and atmosphere (e.g., urban paranoia, rural dread).
+    - Emotional tone (e.g., escalating tension, ironic twists, cathartic horror).
+
+    Output strictly as a **valid JSON array of strings**, containing only the movie titles, in chronological release order (earliest first). Example: ["The Shining", "Rosemary's Baby", "Hereditary"]. 
+    If zero matches, return an empty array [].
+
+    Synopsis: {synopsis}
+
     """
+
     try:
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[{"role": "user", "content": prompt}],
-            temperature=0
+            temperature=0,
+            max_tokens=3000
         )
-
+        
+        print("Is it here")
         content = response.choices[0].message.content.strip()
 
-        # Remove any code block formatting
         if content.startswith("```"):
             content = content.strip("`").replace("json", "").strip()
 
         # Parse JSON safely
-        keywords = json.loads(content)
-        if isinstance(keywords, list):
-            # Keep only strings and remove duplicates
-            return list(dict.fromkeys([k for k in keywords if isinstance(k, str) and len(k) > 1]))
+        data = json.loads(content)
+
+        if isinstance(data, list) and all(isinstance(item, str) and item.strip() for item in data):
+            return list(dict.fromkeys([item.strip() for item in data if item.strip()]))
         else:
-            print("Unexpected format, got:", type(keywords))
+            print("Unexpected format, got:", type(data))
             return []
 
     except json.JSONDecodeError as e:
         print("JSON decode error:", e)
-        print("Raw content:", content)  # debug
+        print("Raw content:", content)
         return []
     except Exception as e:
-        print("Error extracting keywords:", e)
+        print("Error analyzing synopsis:", e)
         return []
 
 
 
 # To fetch movies from omdb and tmdb api call and build market context
-def build_market_context(synopsis: str) -> str:
-    """Build market context string from TMDb (main) + OMDb (fallback) results."""
-    keywords = extract_keywords(synopsis)
-    if not keywords:
-        return ""
+def build_market_context(synopsis: str, top_n: int = 5) -> str:
+    """
+    Build market context string for a movie treatment using TMDb (main) + OMDb (fallback).
+    Uses similar_movies() to find comparable films based on thematic, tonal, and narrative alignment.
+    No local database required.
+    """
+    # Step 1: Find similar movies
+    movie_titles = similar_movies(synopsis)
+    
+    print("Maaybe Here")
+    if not movie_titles:
+        return "No comparable movies found for the provided synopsis.", []
 
-    print(f"Extracted keywords for market analysis: {keywords}")
+    print(f"Found {len(movie_titles)} comparable movies: {movie_titles}")
 
-    # Search both APIs
-    tmdb_results = search_tmdb_movies(keywords)
-    omdb_results = search_omdb_movies(keywords)
+    # Step 2: Search TMDb and OMDb using movie titles
+    tmdb_results = search_tmdb_movies_by_titles(movie_titles, top_n=top_n)
+    omdb_results = search_omdb_movies_by_titles(movie_titles, top_n=top_n)
 
-    # Merge (TMDb main + OMDb fallback fields)
-    all_results = merge_tmdb_omdb(tmdb_results, omdb_results)
-
-    print(f"Found {len(all_results)} comparable movies")
+    # Step 3: Merge TMDb and OMDb results
+    all_results = merge_tmdb_omdb_titles(tmdb_results, omdb_results, top_n=top_n)
 
     if not all_results:
-        return ""
+        return "No comparable movies found for the provided synopsis."
 
-    # Format results for GPT prompt
+    print(f"Retrieved details for {len(all_results)} comparable movies")
+
+    comparable_movies = []
+
+    # Step 4: Format market context string
     context = "MARKET CONTEXT - Comparable Movies:\n\n"
 
-    for i, movie in enumerate(all_results[:5], 1):
+    for i, movie in enumerate(all_results, 1):
         context += f"MOVIE {i}: {movie.get('Title', 'Unknown')}\n"
-        context += f"Year: {movie.get('Year') or movie.get('ReleaseDate', 'N/A')}\n"
+        context += f"Year: {movie.get('Year', 'N/A')}\n"
 
+        poster_base_url = "https://image.tmdb.org/t/p/w500/"
+        poster_path = movie.get("Poster_Path")  # .get returns None by default if key is missing
+
+        if "https://" not in poster_path and poster_path is not None:
+          poster_url = f"{poster_base_url}{poster_path}" if poster_path else None
+        else:
+            poster_url = poster_path
+
+        comparable_movies.append({
+            "Title": movie.get("Title", "Unknown"),
+            "Year": movie.get("Year", "N/A"),
+            "Poster": poster_url
+        })
+
+        # Genres
         if movie.get("Genres"):
             context += f"Genres: {', '.join(movie['Genres'])}\n"
         elif movie.get("Genre"):
             context += f"Genres: {movie['Genre']}\n"
 
+        # Director
         if movie.get("Director"):
             context += f"Director: {movie['Director']}\n"
 
+        # Cast
         if movie.get("Cast"):
             context += f"Cast: {', '.join(movie['Cast'])}\n"
         elif movie.get("Actors"):
             context += f"Cast: {movie['Actors']}\n"
 
+        # Ratings
         if movie.get("imdbRating"):
             context += f"IMDB Rating: {movie['imdbRating']}\n"
         if movie.get("VoteAverage"):
             context += f"TMDb Rating: {movie['VoteAverage']}\n"
 
+        # Popularity / Metascore
         if movie.get("Popularity"):
             context += f"Popularity: {movie['Popularity']}\n"
-
         if movie.get("Metascore"):
             context += f"Metascore: {movie['Metascore']}\n"
 
+        # Keywords
         if movie.get("Keywords"):
             context += f"Keywords: {', '.join(movie['Keywords'][:5])}\n"
 
+        # Plot / Overview
         if movie.get("Overview"):
             context += f"Overview: {movie['Overview'][:300]}...\n"
         elif movie.get("Plot"):
             context += f"Plot: {movie['Plot'][:300]}...\n"
 
+        # Budget / Revenue
         if movie.get("Budget"):
             context += f"Budget: {movie['Budget']}\n"
-          
         if movie.get("Revenue"):
-            context += f"Budget: {movie['Budget']}\n"
-            
+            context += f"Revenue: {movie['Revenue']}\n"
+
         context += "\n"
+
+    # Step 5: Include synopsis metadata
+    context += "SYNOPSIS HIGHLIGHTS:\n"
+    context += f"Comparable Titles: {', '.join(movie_titles)}\n\n"
 
     context += (
         "Use this market data to assess the synopsis's commercial potential, "
         "genre fit, and audience appeal compared to successful films.\n\n"
     )
 
-    return context
+    return context, comparable_movies
 
 
 # ---------------------------------------------------------------
@@ -186,12 +227,12 @@ def analyze_synopsis(req: StoryRequest):
         print("Here")
         
         # Build market context from OMDb/TMDb
-        market_context = build_market_context(req.story)
-
+        market_context, comparable_movies = build_market_context(req.story)
+        print("Its is here")
         # A clear and robust openai script for good JSON based response
         prompt = f"""
         You are an expert Hollywood script and story analyst and data scientist. 
-        Analyze the following film synopsis and provide ONLY a valid JSON response with data-driven, unbiased insights about its creative potential and commercial viability. 
+        Analyze the following film synopsis or treatment and provide ONLY a valid JSON response with data-driven, unbiased insights about its creative potential and commercial viability. 
         Be critical and honest, even harsh if the synopsis merits it, prioritizing objective analysis over positive framing. 
         Do not assume market fit or appeal unless supported by evidence.
 
@@ -203,12 +244,13 @@ def analyze_synopsis(req: StoryRequest):
         2. Current market trends and audience preferences in similar categories
         3. Commercial potential based on comparable movies' performance
         4. Casting and production feasibility based on similar projects
+        5. Also consider the above given comparable movies data to determine its potential
 
         Return ONLY a single JSON object with this exact structure. Do not include markdown, explanations, or additional text.
 
         {{
             "story_impact_report": {{
-                "title": "Professional Report Title - {req.story[:30]}...",
+                "title": "A compelling, catchy, and marketable film title",
                 "logline": "A compelling, single-sentence logline summarizing the story's core conflict and stakes",
                 "top_level_score": {{
                     "overall": 85,
@@ -298,14 +340,16 @@ def analyze_synopsis(req: StoryRequest):
             if market_context:
                 result["metadata"] = {
                     "market_search_performed": True,
-                    "comparable_movies_found": len(extract_keywords(req.story)),
+                    "comparable_movies_found": len(comparable_movies),
                     "analysis_timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
                 }
+                result["similar_movies"] = comparable_movies
             else:
                 result["metadata"] = {
                     "market_search_performed": False,
                     "reason": "API keys not configured"
                 }
+            
 
             return result
             
