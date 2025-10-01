@@ -44,7 +44,6 @@ emotion_model = pipeline(
 )
 
 def similar_movies(synopsis: str) -> List[str]:
-    """Find 0–10 movies similar to the provided synopsis based on thematic, tonal, and narrative alignment."""
     prompt = f"""
     You are a discerning film recommendation engine, modeled after expert critics like Roger Ebert or Pauline Kael. 
     Your recommendations are thoughtful, precise, and based on deep analysis of thematic resonance, tonal alignment, 
@@ -187,9 +186,9 @@ def build_market_context(synopsis: str, top_n: int = 5) -> str:
 
         # Plot / Overview
         if movie.get("Overview"):
-            context += f"Overview: {movie['Overview'][:300]}...\n"
+            context += f"Overview: {movie['Overview'][:500]}...\n"
         elif movie.get("Plot"):
-            context += f"Plot: {movie['Plot'][:300]}...\n"
+            context += f"Plot: {movie['Plot'][:500]}...\n"
 
         # Budget / Revenue
         if movie.get("Budget"):
@@ -266,10 +265,10 @@ def analyze_synopsis(req: StoryRequest):
                     {{"point": "End", "intensity": 7}}
                 ],
                 "key_insights": {{
-                    "summary": "A professional 2-3 sentence analysis of the story's core narrative strengths and market appeal.",
-                    "genres": ["Drama", "Thriller", "Sci-Fi"],
+                    "summary": "A professional 3-5 sentence analysis of the story's core narrative strengths and market appeal.",
+                    "genres": ["Drama", "Thriller", "Sci-Fi", "Romance", "Horror", "Mystery"],
                     "themes": ["Redemption", "Technology", "Family"],
-                    "target_audience": ["Millennials", "Sci-Fi Fans", "Urban Professionals"]
+                    "target_audience": ["Millennials", "Sci-Fi Fans", "Urban Professionals", "Youth"]
                 }},
                 "characters": [
                     {{

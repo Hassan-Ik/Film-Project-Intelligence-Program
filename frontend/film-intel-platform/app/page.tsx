@@ -7,7 +7,7 @@ import CharacterCard from "../components/CharacterCard";
 import InsightsCard from "../components/InsightsCard";
 import PitchPointsCard from "@/components/PitchPointCard";
 import SimilarMoviesCarousel from "@/components/SimilarMoviesCarousel";
-
+import Navbar from '@/components/Navbar';
 
 export default function Home() {
   const [synopsis, setSynopsis] = useState<string>("");
@@ -40,9 +40,6 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-gradient-to-b from-gray-950 via-gray-900 to-gray-800 text-gray-100 p-6 flex flex-col">
       <header className="text-center mb-8">
-        <h1 className="text-4xl font-extrabold text-indigo-400 drop-shadow-md tracking-wide">
-          Film Intelligence Platform
-        </h1>
         <h2 className="text-xl font-medium text-gray-300 mt-2">
           🎬 Story & Treatment Analyzer
         </h2>
